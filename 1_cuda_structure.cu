@@ -16,8 +16,8 @@ int main()
 {
 
     int nx, ny, nz;
-    nx = 8; ny = 8; nz = 16;
-    dim3 block(4,4,8);
+    nx = 8; ny = 8; nz = 8;
+    dim3 block(2,2,2);
     dim3 grid(nx/block.x, ny/block.y, nz/block.z);
 
     print_details << <grid,block>> > ();
