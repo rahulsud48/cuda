@@ -1,43 +1,74 @@
 #include "cuda_runtime.h"
 #include "device_launch_parameters.h"
-#include<iostream>
-#include<stdio.h>
-#include<stdlib.h>
+#include <iostream>
+#include <stdio.h>
+#include <stdlib.h>
 
-__global__ void unique_idx_calc_threadIdx(int* input)
+__global__ void unique_global_thread_id(int* input)
 {
-    int tid = (gridDim.x * blockDim.x * blockIdx.y) + (blockDim.x * blockIdx.x) + threadIdx.x;
-    printf("threadIdx : %d, valuse : %d \n", tid, input[tid]);
+    // Compute the global thread ID across all blocks
+    int global_id = (blockIdx.z * gridDim.y * gridDim.x + blockIdx.y * gridDim.x + blockIdx.x) * 
+                    (blockDim.z * blockDim.y * blockDim.x) + 
+                    (threadIdx.z * blockDim.y * blockDim.x) + 
+                    (threadIdx.y * blockDim.x) + 
+                    threadIdx.x;
+
+    printf("blockIdx.z: %d, blockIdx.y: %d, blockIdx.x: %d, threadIdx.z: %d, threadIdx.y: %d, threadIdx.x: %d, Global Thread ID: %d, Value: %d\n",
+        blockIdx.z, blockIdx.y, blockIdx.x,
+        threadIdx.z, threadIdx.y, threadIdx.x,
+        global_id, input[global_id]);
 }
 
 int main()
 {
-    int array_size = 16;
+    int grid_x = 2, grid_y = 2, grid_z = 2;   // Grid of size 2x2x1
+    int block_x = 4, block_y = 4, block_z = 4; // Block of size 4x4x4
+
+    int total_threads = (grid_x * grid_y * grid_z) * (block_x * block_y * block_z);
+    int array_size = total_threads;
     int array_byte_size = sizeof(int) * array_size;
-    // std::cout<<"dtype size is: "<<sizeof(int))<<"\n";
-    printf("total array size is: %d \n", array_byte_size);
+    
+    printf("Total array size is: %d bytes, Total threads: %d\n", array_byte_size, total_threads);
 
-    int h_data[] = {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15};
+    // Allocate host memory
+    int* h_data = (int*)malloc(array_byte_size);
 
-    for (int i=0; i<array_size; i++)
+    // Initialize host array
+    for (int i = 0; i < array_size; i++)
+    {
+        h_data[i] = i;
+    }
+
+    // Print host array
+    for (int i = 0; i < array_size; i++)
     {
         printf("%d ", h_data[i]);
     }
-
     printf("\n \n");
 
+    // Allocate device memory
     int* d_data;
+    cudaError_t err = cudaMalloc((void**)&d_data, array_byte_size);
+    if (err != cudaSuccess) {
+        printf("CUDA malloc failed! %s\n", cudaGetErrorString(err));
+        return -1;
+    }
 
-    cudaMalloc((void**)&d_data, array_byte_size);
+    // Copy data to device
     cudaMemcpy(d_data, h_data, array_byte_size, cudaMemcpyHostToDevice);
 
-    dim3 block(4);
-    dim3 grid(2,2);
+    // Define grid and block dimensions
+    dim3 grid(grid_x, grid_y, grid_z);
+    dim3 block(block_x, block_y, block_z);
 
-    unique_idx_calc_threadIdx <<<grid, block >> > (d_data);
+    // Launch kernel
+    unique_global_thread_id<<<grid, block>>>(d_data);
     cudaDeviceSynchronize();
 
-    cudaDeviceReset();
+    // Free allocated memory
+    cudaFree(d_data);
+    free(h_data);
 
+    cudaDeviceReset();
     return 0;
 }
